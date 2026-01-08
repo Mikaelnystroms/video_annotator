@@ -1,0 +1,1 @@
+recursive-include video_annotator/frontend/build *

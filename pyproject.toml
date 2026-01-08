@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamlit-video-annotator"
+version = "0.1.0"
+description = "A Streamlit component for annotating videos with drawable regions and time-range markers"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = ["streamlit", "video", "annotation", "machine-learning", "computer-vision"]
+authors = [
+    {name = "Mikael Nystrom", email = "mikaelnystromm@gmail.com"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Video",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "streamlit>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/mikaelnystroms/video_annotator"
+Repository = "https://github.com/mikaelnystroms/video_annotator"
+Issues = "https://github.com/mikaelnystroms/video_annotator/issues"
+
+[tool.setuptools]
+packages = ["video_annotator"]
+
+[tool.setuptools.package-data]
+video_annotator = ["frontend/build/*"]
