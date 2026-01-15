@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Streamlit } from 'streamlit-component-lib';
-import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS } from './types';
+import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS, Theme } from './types';
 import './VideoAnnotator.css';
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   height: number;
   labels: Labels;
   colors?: string[];
+  theme?: Theme;
 }
 
 /** Generate a UUID v4 */
@@ -32,6 +33,27 @@ function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+/** Get single-letter indicator for shape type */
+function getShapeIndicator(shapeType: Shape['type']): string {
+  switch (shapeType) {
+    case 'rectangle': return 'R';
+    case 'circle': return 'C';
+    case 'path': return 'P';
+    case 'arrow': return 'A';
+  }
+}
+
+/** Get localized shape name for instructions */
+function getShapeName(tool: DrawingTool, labels: Labels): string {
+  switch (tool) {
+    case 'rectangle': return labels.rectangle.toLowerCase();
+    case 'circle': return labels.circle.toLowerCase();
+    case 'path': return (labels.freedraw || 'freedraw').toLowerCase();
+    case 'arrow': return (labels.arrow || 'arrow').toLowerCase();
+    default: return '';
+  }
 }
 
 /**
@@ -154,9 +176,9 @@ const VideoAnnotator: React.FC<Props> = ({
   videoUrl,
   existingAnnotations,
   height,
-  
   labels,
   colors = DEFAULT_COLORS,
+  theme,
 }) => {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -187,6 +209,19 @@ const VideoAnnotator: React.FC<Props> = ({
   const [comment, setComment] = useState('');
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  // Set CSS variables from Streamlit theme
+  useEffect(() => {
+    if (theme && containerRef.current) {
+      const root = containerRef.current;
+      root.style.setProperty('--primary-color', theme.primaryColor);
+      root.style.setProperty('--background-color', theme.backgroundColor);
+      root.style.setProperty('--secondary-background-color', theme.secondaryBackgroundColor);
+      root.style.setProperty('--text-color', theme.textColor);
+      root.style.setProperty('--font', theme.font);
+      root.dataset.theme = theme.base;
+    }
+  }, [theme]);
 
   // Initialize annotations from props (only on first load)
   useEffect(() => {
@@ -304,38 +339,46 @@ const VideoAnnotator: React.FC<Props> = ({
     canvasHeight: number,
     lineWidth: number,
     fillOpacity: string
-  ) {
+  ): void {
     ctx.strokeStyle = shape.color;
     ctx.lineWidth = lineWidth;
 
-    if (shape.type === 'path') {
-      // Path: stroke only, no fill
-      drawSmoothPath(ctx, shape.points, canvasWidth, canvasHeight);
-    } else if (shape.type === 'arrow') {
-      // Arrow: line with filled arrowhead
-      drawArrow(ctx, shape, canvasWidth, canvasHeight);
-    } else if (shape.type === 'rectangle') {
-      ctx.fillStyle = shape.color + fillOpacity;
-      const x = shape.x * canvasWidth;
-      const y = shape.y * canvasHeight;
-      const w = shape.width * canvasWidth;
-      const h = shape.height * canvasHeight;
-      ctx.fillRect(x - w / 2, y - h / 2, w, h);
-      ctx.strokeRect(x - w / 2, y - h / 2, w, h);
-    } else if (shape.type === 'circle') {
-      ctx.fillStyle = shape.color + fillOpacity;
-      const x = shape.x * canvasWidth;
-      const y = shape.y * canvasHeight;
-      const r = shape.radius * canvasWidth;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+    switch (shape.type) {
+      case 'path':
+        drawSmoothPath(ctx, shape.points, canvasWidth, canvasHeight);
+        break;
+
+      case 'arrow':
+        drawArrow(ctx, shape, canvasWidth, canvasHeight);
+        break;
+
+      case 'rectangle': {
+        ctx.fillStyle = shape.color + fillOpacity;
+        const x = shape.x * canvasWidth;
+        const y = shape.y * canvasHeight;
+        const w = shape.width * canvasWidth;
+        const h = shape.height * canvasHeight;
+        ctx.fillRect(x - w / 2, y - h / 2, w, h);
+        ctx.strokeRect(x - w / 2, y - h / 2, w, h);
+        break;
+      }
+
+      case 'circle': {
+        ctx.fillStyle = shape.color + fillOpacity;
+        const x = shape.x * canvasWidth;
+        const y = shape.y * canvasHeight;
+        const r = shape.radius * canvasWidth;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        break;
+      }
     }
   }
 
   /** Get normalized coordinates from mouse event */
-  const getNormalizedCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  function getNormalizedCoords(e: React.MouseEvent<HTMLCanvasElement>): { x: number; y: number } {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
 
@@ -344,7 +387,7 @@ const VideoAnnotator: React.FC<Props> = ({
       x: (e.clientX - rect.left) / rect.width,
       y: (e.clientY - rect.top) / rect.height,
     };
-  };
+  }
 
   // Mouse handlers for drawing
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -390,64 +433,75 @@ const VideoAnnotator: React.FC<Props> = ({
 
     const coords = getNormalizedCoords(e);
 
-    if (currentShape.type === 'path') {
-      const lastPoint = currentShape.points[currentShape.points.length - 1];
-      const distance = Math.sqrt(
-        Math.pow(coords.x - lastPoint.x, 2) +
-        Math.pow(coords.y - lastPoint.y, 2)
-      );
+    switch (currentShape.type) {
+      case 'path': {
+        const lastPoint = currentShape.points[currentShape.points.length - 1];
+        const dx = coords.x - lastPoint.x;
+        const dy = coords.y - lastPoint.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance > 0.005) {
+        if (distance > 0.005) {
+          setCurrentShape({
+            ...currentShape,
+            points: [...currentShape.points, coords],
+          });
+        }
+        break;
+      }
+
+      case 'arrow':
         setCurrentShape({
           ...currentShape,
-          points: [...currentShape.points, coords],
+          endX: coords.x,
+          endY: coords.y,
         });
+        break;
+
+      case 'rectangle':
+        setCurrentShape({
+          ...currentShape,
+          x: (drawStart.x + coords.x) / 2,
+          y: (drawStart.y + coords.y) / 2,
+          width: Math.abs(coords.x - drawStart.x),
+          height: Math.abs(coords.y - drawStart.y),
+        });
+        break;
+
+      case 'circle': {
+        const dx = coords.x - drawStart.x;
+        const dy = coords.y - drawStart.y;
+        setCurrentShape({
+          ...currentShape,
+          x: drawStart.x,
+          y: drawStart.y,
+          radius: Math.sqrt(dx * dx + dy * dy),
+        });
+        break;
       }
-    } else if (currentShape.type === 'arrow') {
-      setCurrentShape({
-        ...currentShape,
-        endX: coords.x,
-        endY: coords.y,
-      });
-    } else if (currentShape.type === 'rectangle') {
-      setCurrentShape({
-        ...currentShape,
-        x: (drawStart.x + coords.x) / 2,
-        y: (drawStart.y + coords.y) / 2,
-        width: Math.abs(coords.x - drawStart.x),
-        height: Math.abs(coords.y - drawStart.y),
-      });
-    } else if (currentShape.type === 'circle') {
-      const dx = coords.x - drawStart.x;
-      const dy = coords.y - drawStart.y;
-      setCurrentShape({
-        ...currentShape,
-        x: drawStart.x,
-        y: drawStart.y,
-        radius: Math.sqrt(dx * dx + dy * dy),
-      });
     }
   };
+
+  /** Check if a shape has sufficient size to be valid */
+  function shapeHasValidSize(shape: Shape): boolean {
+    switch (shape.type) {
+      case 'path':
+        return shape.points.length >= 3;
+      case 'arrow': {
+        const dx = shape.endX - shape.x;
+        const dy = shape.endY - shape.y;
+        return Math.sqrt(dx * dx + dy * dy) > 0.02;
+      }
+      case 'rectangle':
+        return shape.width > 0.01 && shape.height > 0.01;
+      case 'circle':
+        return shape.radius > 0.01;
+    }
+  }
 
   const handleMouseUp = () => {
     if (!isDrawing || !currentShape) return;
 
-    let hasSize = false;
-
-    if (currentShape.type === 'path') {
-      hasSize = currentShape.points.length >= 3;
-    } else if (currentShape.type === 'arrow') {
-      const dx = currentShape.endX - currentShape.x;
-      const dy = currentShape.endY - currentShape.y;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      hasSize = length > 0.02;
-    } else if (currentShape.type === 'rectangle') {
-      hasSize = currentShape.width > 0.01 && currentShape.height > 0.01;
-    } else if (currentShape.type === 'circle') {
-      hasSize = currentShape.radius > 0.01;
-    }
-
-    if (hasSize) {
+    if (shapeHasValidSize(currentShape)) {
       setPendingShape(currentShape);
     }
 
@@ -704,9 +758,7 @@ const VideoAnnotator: React.FC<Props> = ({
                       className="shape-indicator"
                       style={{ backgroundColor: ann.shape.color }}
                     >
-                      {ann.shape.type === 'rectangle' ? 'R' :
-                       ann.shape.type === 'circle' ? 'C' :
-                       ann.shape.type === 'path' ? 'P' : 'A'}
+                      {getShapeIndicator(ann.shape.type)}
                     </span>
                     <button
                       className="delete-btn"
@@ -729,13 +781,7 @@ const VideoAnnotator: React.FC<Props> = ({
       {/* Instruction banner */}
       {selectedTool && !pendingShape && (
         <div className="instruction-banner">
-          {labels.drawInstruction.replace(
-            '{shape}',
-            selectedTool === 'rectangle' ? labels.rectangle.toLowerCase() :
-            selectedTool === 'circle' ? labels.circle.toLowerCase() :
-            selectedTool === 'path' ? (labels.freedraw || 'freedraw').toLowerCase() :
-            selectedTool === 'arrow' ? (labels.arrow || 'arrow').toLowerCase() : ''
-          )}
+          {labels.drawInstruction.replace('{shape}', getShapeName(selectedTool, labels))}
         </div>
       )}
     </div>

@@ -8,7 +8,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Streamlit, RenderData } from 'streamlit-component-lib';
 import VideoAnnotator from './VideoAnnotator';
-import { ComponentArgs, DEFAULT_COLORS } from './types';
+import { ComponentArgs, DEFAULT_COLORS, Theme } from './types';
 
 // Initialize Streamlit connection
 Streamlit.setComponentReady();
@@ -20,6 +20,7 @@ const root = createRoot(container!);
 function onRender(event: Event): void {
   const renderEvent = event as CustomEvent<RenderData>;
   const args = renderEvent.detail.args as ComponentArgs;
+  const theme = renderEvent.detail.theme as Theme | undefined;
 
   root.render(
     <React.StrictMode>
@@ -29,6 +30,7 @@ function onRender(event: Event): void {
         height={args.height || 600}
         labels={args.labels}
         colors={args.colors || DEFAULT_COLORS}
+        theme={theme}
       />
     </React.StrictMode>
   );

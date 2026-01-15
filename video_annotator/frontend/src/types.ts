@@ -137,3 +137,15 @@ export const DEFAULT_COLORS = [
   '#ff00ff',
   '#00ffff',
 ];
+
+/**
+ * Streamlit theme object passed to components
+ */
+export interface Theme {
+  base: 'light' | 'dark';
+  primaryColor: string;
+  backgroundColor: string;
+  secondaryBackgroundColor: string;
+  textColor: string;
+  font: string;
+}
