@@ -12,7 +12,7 @@ import { ComponentArgs, DEFAULT_COLORS, Theme } from './types';
 
 // Initialize Streamlit connection
 Streamlit.setComponentReady();
-Streamlit.setFrameHeight(600);
+Streamlit.setFrameHeight(800);
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
@@ -21,21 +21,24 @@ function onRender(event: Event): void {
   const renderEvent = event as CustomEvent<RenderData>;
   const args = renderEvent.detail.args as ComponentArgs;
   const theme = renderEvent.detail.theme as Theme | undefined;
+  const height = args.height ?? 600;
+  const existingAnnotations = args.existingAnnotations ?? [];
+  const colors = args.colors ?? DEFAULT_COLORS;
 
   root.render(
     <React.StrictMode>
       <VideoAnnotator
         videoUrl={args.videoUrl}
-        existingAnnotations={args.existingAnnotations || []}
-        height={args.height || 600}
+        existingAnnotations={existingAnnotations}
+        height={height}
         labels={args.labels}
-        colors={args.colors || DEFAULT_COLORS}
+        colors={colors}
         theme={theme}
       />
     </React.StrictMode>
   );
 
-  Streamlit.setFrameHeight(args.height || 600);
+  Streamlit.setFrameHeight(height);
 }
 
 Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);

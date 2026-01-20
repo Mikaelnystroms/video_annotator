@@ -25,7 +25,7 @@ pip install streamlit-video-annotator
 
 ## Try the Demo
 
-Want to see it in action first? Clone the repository and run the demo app:
+Clone the repository and run the demo app:
 
 ```bash
 git clone https://github.com/mikaelnystrom/video_annotator.git
@@ -91,7 +91,7 @@ existing_annotations = [
 result = video_annotator(
     video_url="https://example.com/video.mp4",
     existing_annotations=existing_annotations,
-    height=700
+    height=800
 )
 ```
 
@@ -138,7 +138,7 @@ result = video_annotator(
 video_annotator(
     video_url: str,
     existing_annotations: Optional[List[AnnotationData]] = None,
-    height: int = 600,
+    height: int = 800,
     labels: Optional[Dict[str, str]] = None,
     colors: Optional[List[str]] = None,
     key: Optional[str] = None,
@@ -242,58 +242,10 @@ Returns `None` if no changes occurred.
    STREAMLIT_COMPONENT_DEV=true streamlit run app.py
    ```
 
-### Building for Production
-
-```bash
-cd video_annotator/frontend
-npm run build
-```
-
 ### Publishing to PyPI
 
 This package uses GitHub Actions with PyPI trusted publishing for secure, automated releases.
 
-#### One-Time Setup
-
-1. **Configure PyPI Trusted Publisher**:
-   - Go to https://pypi.org/manage/account/publishing/
-   - Add a new publisher with these details:
-     - **PyPI Project Name**: `streamlit-video-annotator`
-     - **Owner**: Your GitHub username (e.g., `mikaelnystroms`)
-     - **Repository name**: `video_annotator`
-     - **Workflow name**: `publish.yml`
-     - **Environment name**: `pypi`
-
-2. **Create GitHub Environment**:
-   - Go to your repo Settings → Environments
-   - Create a new environment named `pypi`
-   - (Optional) Add protection rules like requiring reviewers
-
-#### Publishing a Release
-
-1. **Update version** in `pyproject.toml` and `video_annotator/video_annotator.py`
-
-2. **Commit and tag**:
-   ```bash
-   git add .
-   git commit -m "Release v0.1.1"
-   git tag v0.1.1
-   git push origin main --tags
-   ```
-
-3. **Automated publish**: The GitHub Action will automatically:
-   - Build the package with `uv`
-   - Publish to PyPI using trusted publishing
-   - No API tokens needed!
-
-#### Manual Publish (Alternative)
-
-If you prefer to publish manually:
-
-```bash
-uv build
-uv publish
-```
 
 ## License
 

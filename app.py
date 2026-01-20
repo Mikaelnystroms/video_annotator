@@ -10,17 +10,16 @@ from video_annotator import video_annotator, DEFAULT_LABELS
 # Page config
 st.set_page_config(
     page_title="Video Annotator Demo",
-    page_icon="🎥",
     layout="wide"
 )
 
-st.title("🎥 Streamlit Video Annotator Demo")
+st.title("Streamlit Video Annotator Demo")
 st.markdown("""
 This is a demo of the `streamlit-video-annotator` component. Try annotating the video below!
 """)
 
 # Sidebar configuration
-st.sidebar.header("⚙️ Configuration")
+st.sidebar.header("Configuration")
 
 # Video URL input
 video_url = st.sidebar.text_input(
@@ -34,12 +33,12 @@ height = st.sidebar.slider(
     "Component Height",
     min_value=400,
     max_value=900,
-    value=600,
+    value=800,
     step=50
 )
 
 # Language selection
-st.sidebar.subheader("🌐 Language")
+st.sidebar.subheader("Language")
 language = st.sidebar.selectbox(
     "UI Language",
     options=["English", "Swedish", "Spanish", "French", "German"],
@@ -136,7 +135,7 @@ LABELS = {
 }
 
 # Color options
-st.sidebar.subheader("🎨 Colors")
+st.sidebar.subheader("Colors")
 use_custom_colors = st.sidebar.checkbox("Use custom colors")
 colors = None
 if use_custom_colors:
@@ -173,7 +172,7 @@ with col1:
             # Add new annotation
             new_ann = result["newAnnotation"]
             st.session_state.annotations.append(new_ann)
-            st.success(f"✅ New annotation added! ID: {new_ann['id']}")
+            st.success(f"New annotation added. ID: {new_ann['id']}")
             st.rerun()
 
         if result.get("deletedAnnotationId"):
@@ -183,18 +182,18 @@ with col1:
                 ann for ann in st.session_state.annotations
                 if ann["id"] != deleted_id
             ]
-            st.warning(f"🗑️ Annotation deleted! ID: {deleted_id}")
+            st.warning(f"Annotation deleted. ID: {deleted_id}")
             st.rerun()
 
 with col2:
-    st.subheader("📊 Annotations Data")
+    st.subheader("Annotations Data")
 
     # Show annotation count
     st.metric("Total Annotations", len(st.session_state.annotations))
 
     # Clear all button
     if st.session_state.annotations:
-        if st.button("🗑️ Clear All Annotations", type="secondary"):
+        if st.button("Clear All Annotations", type="secondary"):
             st.session_state.annotations = []
             st.rerun()
 
@@ -218,7 +217,7 @@ with col2:
 # Footer
 st.markdown("---")
 st.markdown("""
-### 🚀 How to Use
+### How to Use
 
 1. **Mark Time Range**: Click "Mark Start" and "Mark End" buttons while the video plays
 2. **Choose Tool**: Select Rectangle, Circle, Freedraw, or Arrow
@@ -227,13 +226,13 @@ st.markdown("""
 5. **Add Comment**: Write a description of what you're annotating
 6. **Save**: Click "Save Annotation" to store it
 
-### 📦 Installation
+### Installation
 
 ```bash
 pip install streamlit-video-annotator
 ```
 
-### 💻 Code Example
+### Code Example
 
 ```python
 from streamlit_video_annotator import video_annotator
@@ -248,9 +247,9 @@ if result and result.get("newAnnotation"):
     print("New annotation:", result["newAnnotation"])
 ```
 
-### 🔗 Links
+### Links
 
-- [GitHub Repository](https://github.com/mikaelnystrom/video_annotator)
+- [GitHub Repository](https://github.com/mikaelnystroms/video_annotator)
 - [PyPI Package](https://pypi.org/project/streamlit-video-annotator/)
-- [Documentation](https://github.com/mikaelnystrom/video_annotator#readme)
+- [Documentation](https://github.com/mikaelnystroms/video_annotator#readme)
 """)

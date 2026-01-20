@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
 
 [project]
 name = "streamlit-video-annotator"
-version = "0.1.1"
+version = "0.1.3"
 description = "A Streamlit component for annotating videos with drawable regions and time-range markers"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -36,8 +36,7 @@ Homepage = "https://github.com/mikaelnystroms/video_annotator"
 Repository = "https://github.com/mikaelnystroms/video_annotator"
 Issues = "https://github.com/mikaelnystroms/video_annotator/issues"
 
-[tool.setuptools]
-packages = ["video_annotator"]
-
-[tool.setuptools.package-data]
-video_annotator = ["frontend/build/*"]
+[tool.uv.build-backend]
+module-root = ""
+module-name = "video_annotator"
+source-exclude = ["video_annotator/frontend/node_modules/**"]

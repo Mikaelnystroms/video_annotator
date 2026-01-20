@@ -5,7 +5,9 @@ module.exports = {
   entry: './src/index.tsx',
   output: {
     path: path.resolve(__dirname, 'build'),
-    filename: 'bundle.js',
+    filename: '[name].[contenthash].js',
+    chunkFilename: '[name].[contenthash].js',
+    clean: true,
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.jsx'],
@@ -28,6 +30,16 @@ module.exports = {
       template: './public/index.html',
     }),
   ],
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+    },
+    runtimeChunk: 'single',
+  },
+  performance: {
+    maxAssetSize: 512000,
+    maxEntrypointSize: 512000,
+  },
   devServer: {
     static: {
       directory: path.join(__dirname, 'public'),
