@@ -19,6 +19,8 @@ interface Props {
   theme?: Theme;
 }
 
+const PLAYBACK_RATES = [1, 2, 4] as const;
+
 /** Generate a UUID v4 */
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -172,14 +174,14 @@ function drawArrow(
   ctx.stroke();
 }
 
-const VideoAnnotator: React.FC<Props> = ({
+function VideoAnnotator({
   videoUrl,
   existingAnnotations,
   height,
   labels,
   colors = DEFAULT_COLORS,
   theme,
-}) => {
+}: Props): JSX.Element {
   // Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -196,6 +198,7 @@ const VideoAnnotator: React.FC<Props> = ({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
 
   const [selectedTool, setSelectedTool] = useState<DrawingTool>(null);
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -211,7 +214,7 @@ const VideoAnnotator: React.FC<Props> = ({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // Set CSS variables from Streamlit theme
-  useEffect(() => {
+  useEffect(function applyTheme(): void {
     if (theme && containerRef.current) {
       const root = containerRef.current;
       root.style.setProperty('--primary-color', theme.primaryColor);
@@ -224,7 +227,7 @@ const VideoAnnotator: React.FC<Props> = ({
   }, [theme]);
 
   // Initialize annotations from props (only on first load)
-  useEffect(() => {
+  useEffect(function initializeAnnotations(): void {
     if (initialLoadRef.current) {
       setAnnotations(existingAnnotations);
       initialLoadRef.current = false;
@@ -232,7 +235,7 @@ const VideoAnnotator: React.FC<Props> = ({
   }, [existingAnnotations]);
 
   // Restore video state after re-render
-  useEffect(() => {
+  useEffect(function restoreVideoState(): void {
     const video = videoRef.current;
     if (video && videoLoaded && savedTimeRef.current > 0) {
       video.currentTime = savedTimeRef.current;
@@ -242,17 +245,32 @@ const VideoAnnotator: React.FC<Props> = ({
     }
   }, [videoLoaded]);
 
-  // Handle canvas resize with ResizeObserver
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
+  // Apply playback rate when video is ready or rate changes
+  useEffect(function applyPlaybackRate(): void {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
+    }
+  }, [videoLoaded, playbackRateIndex]);
 
-    const updateCanvasSize = () => {
+  // Reset playback rate when video source changes
+  useEffect(function resetPlaybackRate(): void {
+    setPlaybackRateIndex(0);
+  }, [videoUrl]);
+
+  // Handle canvas resize with ResizeObserver
+  useEffect(function observeCanvasResize(): void | (() => void) {
+    function updateCanvasSize(): void {
+      const video = videoRef.current;
+      if (!video) return;
+
       const rect = video.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         setCanvasSize({ width: rect.width, height: rect.height });
       }
-    };
+    }
+
+    const video = videoRef.current;
+    if (!video) return;
 
     const resizeObserver = new ResizeObserver(updateCanvasSize);
     resizeObserver.observe(video);
@@ -262,14 +280,14 @@ const VideoAnnotator: React.FC<Props> = ({
   }, [videoUrl]);
 
   // Video event handlers
-  const handleLoadedMetadata = useCallback(() => {
+  const handleLoadedMetadata = useCallback(function handleLoadedMetadata(): void {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
       setVideoLoaded(true);
     }
   }, []);
 
-  const handleTimeUpdate = useCallback(() => {
+  const handleTimeUpdate = useCallback(function handleTimeUpdate(): void {
     if (videoRef.current) {
       const time = videoRef.current.currentTime;
       setCurrentTime(time);
@@ -277,25 +295,25 @@ const VideoAnnotator: React.FC<Props> = ({
     }
   }, []);
 
-  const handlePlay = useCallback(() => {
+  const handlePlay = useCallback(function handlePlay(): void {
     setIsPlaying(true);
     wasPlayingRef.current = true;
   }, []);
 
-  const handlePause = useCallback(() => {
+  const handlePause = useCallback(function handlePause(): void {
     setIsPlaying(false);
     wasPlayingRef.current = false;
   }, []);
 
   // Get shapes visible at current time
-  const getVisibleShapes = useCallback((): Shape[] => {
+  const getVisibleShapes = useCallback(function getVisibleShapes(): Shape[] {
     return annotations
       .filter((a) => currentTime >= a.startTime && currentTime <= a.endTime)
       .map((a) => a.shape);
   }, [annotations, currentTime]);
 
   // Update canvas dimensions
-  useEffect(() => {
+  useEffect(function syncCanvasSize(): void {
     const canvas = canvasRef.current;
     if (!canvas || canvasSize.width === 0) return;
     canvas.width = canvasSize.width;
@@ -303,7 +321,7 @@ const VideoAnnotator: React.FC<Props> = ({
   }, [canvasSize]);
 
   // Draw shapes on canvas
-  useEffect(() => {
+  useEffect(function renderCanvas(): void {
     const canvas = canvasRef.current;
     if (!canvas || canvasSize.width === 0) return;
 
@@ -390,7 +408,7 @@ const VideoAnnotator: React.FC<Props> = ({
   }
 
   // Mouse handlers for drawing
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  function handleMouseDown(e: React.MouseEvent<HTMLCanvasElement>): void {
     if (!selectedTool || pendingShape) return;
 
     const coords = getNormalizedCoords(e);
@@ -426,9 +444,9 @@ const VideoAnnotator: React.FC<Props> = ({
         color: selectedColor,
       });
     }
-  };
+  }
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  function handleMouseMove(e: React.MouseEvent<HTMLCanvasElement>): void {
     if (!isDrawing || !currentShape) return;
 
     const coords = getNormalizedCoords(e);
@@ -479,7 +497,7 @@ const VideoAnnotator: React.FC<Props> = ({
         break;
       }
     }
-  };
+  }
 
   /** Check if a shape has sufficient size to be valid */
   function shapeHasValidSize(shape: Shape): boolean {
@@ -498,7 +516,7 @@ const VideoAnnotator: React.FC<Props> = ({
     }
   }
 
-  const handleMouseUp = () => {
+  function handleMouseUp(): void {
     if (!isDrawing || !currentShape) return;
 
     if (shapeHasValidSize(currentShape)) {
@@ -507,27 +525,27 @@ const VideoAnnotator: React.FC<Props> = ({
 
     setIsDrawing(false);
     setCurrentShape(null);
-  };
+  }
 
   // Time marker handlers
-  const handleMarkStart = () => {
+  function handleMarkStart(): void {
     setMarkedStartTime(currentTime);
     if (markedEndTime !== null && currentTime > markedEndTime) {
       setMarkedEndTime(null);
     }
-  };
+  }
 
-  const handleMarkEnd = () => {
+  function handleMarkEnd(): void {
     if (markedStartTime !== null && currentTime >= markedStartTime) {
       setMarkedEndTime(currentTime);
     } else if (markedStartTime === null) {
       setMarkedStartTime(0);
       setMarkedEndTime(currentTime);
     }
-  };
+  }
 
   // Save annotation
-  const handleSave = () => {
+  function handleSave(): void {
     if (!pendingShape || markedStartTime === null || markedEndTime === null) return;
 
     const newAnnotation: Annotation = {
@@ -553,42 +571,42 @@ const VideoAnnotator: React.FC<Props> = ({
     setSelectedTool(null);
 
     // Send to Streamlit
-    setTimeout(() => {
+    setTimeout(function notifyStreamlit(): void {
       const value: ComponentValue = { annotations: newAnnotations, newAnnotation };
       Streamlit.setComponentValue(value);
     }, 100);
-  };
+  }
 
-  const handleCancel = () => {
+  function handleCancel(): void {
     setPendingShape(null);
     setMarkedStartTime(null);
     setMarkedEndTime(null);
     setComment('');
     setCurrentShape(null);
     setIsDrawing(false);
-  };
+  }
 
   // Delete annotation
-  const handleDelete = (id: string) => {
+  function handleDelete(id: string): void {
     if (sentDeletionsRef.current.has(id)) return;
 
     const newAnnotations = annotations.filter((a) => a.id !== id);
     setAnnotations(newAnnotations);
     sentDeletionsRef.current.add(id);
 
-    setTimeout(() => {
+    setTimeout(function notifyStreamlit(): void {
       const value: ComponentValue = { annotations: newAnnotations, deletedAnnotationId: id };
       Streamlit.setComponentValue(value);
     }, 100);
-  };
+  }
 
-  const handleSeekToAnnotation = (annotation: Annotation) => {
+  function handleSeekToAnnotation(annotation: Annotation): void {
     if (videoRef.current) {
       videoRef.current.currentTime = annotation.startTime;
     }
-  };
+  }
 
-  const togglePlayPause = () => {
+  function togglePlayPause(): void {
     if (videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -596,7 +614,11 @@ const VideoAnnotator: React.FC<Props> = ({
         videoRef.current.play();
       }
     }
-  };
+  }
+
+  function togglePlaybackRate(): void {
+    setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
+  }
 
   return (
     <div className="video-annotator" style={{ height }} ref={containerRef}>
@@ -625,6 +647,9 @@ const VideoAnnotator: React.FC<Props> = ({
           <div className="video-controls">
             <button className="play-pause-btn" onClick={togglePlayPause}>
               {isPlaying ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
+            </button>
+            <button className="playback-speed-btn" onClick={togglePlaybackRate}>
+              ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
             </button>
             <input
               type="range"
@@ -786,6 +811,6 @@ const VideoAnnotator: React.FC<Props> = ({
       )}
     </div>
   );
-};
+}
 
 export default VideoAnnotator;
