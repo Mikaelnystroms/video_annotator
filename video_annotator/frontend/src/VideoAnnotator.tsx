@@ -19,6 +19,8 @@ interface Props {
   theme?: Theme;
 }
 
+const PLAYBACK_RATES = [1, 2, 4] as const;
+
 /** Generate a UUID v4 */
 function generateId(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -196,6 +198,7 @@ const VideoAnnotator: React.FC<Props> = ({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
+  const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
 
   const [selectedTool, setSelectedTool] = useState<DrawingTool>(null);
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -241,6 +244,18 @@ const VideoAnnotator: React.FC<Props> = ({
       }
     }
   }, [videoLoaded]);
+
+  // Apply playback rate when video is ready or rate changes
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
+    }
+  }, [videoLoaded, playbackRateIndex]);
+
+  // Reset playback rate when video source changes
+  useEffect(() => {
+    setPlaybackRateIndex(0);
+  }, [videoUrl]);
 
   // Handle canvas resize with ResizeObserver
   useEffect(() => {
@@ -598,6 +613,10 @@ const VideoAnnotator: React.FC<Props> = ({
     }
   };
 
+  const togglePlaybackRate = () => {
+    setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
+  };
+
   return (
     <div className="video-annotator" style={{ height }} ref={containerRef}>
       <div className="main-content">
@@ -625,6 +644,9 @@ const VideoAnnotator: React.FC<Props> = ({
           <div className="video-controls">
             <button className="play-pause-btn" onClick={togglePlayPause}>
               {isPlaying ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
+            </button>
+            <button className="playback-speed-btn" onClick={togglePlaybackRate}>
+              ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
             </button>
             <input
               type="range"
