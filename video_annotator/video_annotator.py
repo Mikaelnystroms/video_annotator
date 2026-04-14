@@ -28,7 +28,7 @@ from typing import Any, Dict, List, Optional, TypedDict
 
 import streamlit.components.v1 as components
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 # Development vs production mode
 # Use build folder if it exists, unless explicitly set to dev mode
