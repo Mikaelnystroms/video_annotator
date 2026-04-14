@@ -20,6 +20,7 @@ interface Props {
 }
 
 const PLAYBACK_RATES = [1, 2, 4] as const;
+const REWIND_TICK_MS = 50;
 
 /** Generate a UUID v4 */
 function generateId(): string {
@@ -191,6 +192,9 @@ function VideoAnnotator({
   const savedTimeRef = useRef(0);
   const wasPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
+  const rewindIntervalRef = useRef<number | null>(null);
+  const rewindLastTickRef = useRef<number | null>(null);
+  const rewindResumePlaybackRef = useRef(false);
 
   // State
   const [annotations, setAnnotations] = useState<Annotation[]>(existingAnnotations);
@@ -199,6 +203,8 @@ function VideoAnnotator({
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
   const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
+  const [rewindRateIndex, setRewindRateIndex] = useState(0);
+  const [isRewinding, setIsRewinding] = useState(false);
 
   const [selectedTool, setSelectedTool] = useState<DrawingTool>(null);
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -212,6 +218,62 @@ function VideoAnnotator({
   const [comment, setComment] = useState('');
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  function clearRewindLoop(): void {
+    if (rewindIntervalRef.current !== null) {
+      window.clearInterval(rewindIntervalRef.current);
+      rewindIntervalRef.current = null;
+    }
+
+    rewindLastTickRef.current = null;
+  }
+
+  function stopRewind(resumePlayback = false): void {
+    clearRewindLoop();
+    setIsRewinding(false);
+
+    const shouldResumePlayback = resumePlayback && rewindResumePlaybackRef.current;
+    rewindResumePlaybackRef.current = false;
+
+    if (shouldResumePlayback && videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }
+
+  function startRewind(nextRateIndex: number): void {
+    const video = videoRef.current;
+    if (!video || nextRateIndex === 0) return;
+
+    if (!isRewinding) {
+      rewindResumePlaybackRef.current = !video.paused;
+    }
+
+    clearRewindLoop();
+    video.pause();
+    video.playbackRate = 1;
+    rewindLastTickRef.current = performance.now();
+    setIsRewinding(true);
+
+    rewindIntervalRef.current = window.setInterval(() => {
+      const currentVideo = videoRef.current;
+      if (!currentVideo) return;
+
+      const now = performance.now();
+      const lastTick = rewindLastTickRef.current ?? now;
+      const elapsedSeconds = (now - lastTick) / 1000;
+      rewindLastTickRef.current = now;
+
+      const nextTime = Math.max(0, currentVideo.currentTime - elapsedSeconds * PLAYBACK_RATES[nextRateIndex]);
+      currentVideo.currentTime = nextTime;
+      setCurrentTime(nextTime);
+      savedTimeRef.current = nextTime;
+
+      if (nextTime <= 0) {
+        setRewindRateIndex(0);
+        stopRewind(false);
+      }
+    }, REWIND_TICK_MS);
+  }
 
   // Set CSS variables from Streamlit theme
   useEffect(function applyTheme(): void {
@@ -248,14 +310,22 @@ function VideoAnnotator({
   // Apply playback rate when video is ready or rate changes
   useEffect(function applyPlaybackRate(): void {
     if (videoRef.current) {
-      videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
+      videoRef.current.playbackRate = isRewinding ? 1 : PLAYBACK_RATES[playbackRateIndex];
     }
-  }, [videoLoaded, playbackRateIndex]);
+  }, [videoLoaded, playbackRateIndex, isRewinding]);
 
   // Reset playback rate when video source changes
   useEffect(function resetPlaybackRate(): void {
+    stopRewind(false);
     setPlaybackRateIndex(0);
+    setRewindRateIndex(0);
   }, [videoUrl]);
+
+  useEffect(function cleanupRewindLoop(): () => void {
+    return () => {
+      clearRewindLoop();
+    };
+  }, []);
 
   // Handle canvas resize with ResizeObserver
   useEffect(function observeCanvasResize(): void | (() => void) {
@@ -296,9 +366,15 @@ function VideoAnnotator({
   }, []);
 
   const handlePlay = useCallback(function handlePlay(): void {
+    if (isRewinding) {
+      clearRewindLoop();
+      rewindResumePlaybackRef.current = false;
+      setIsRewinding(false);
+      setRewindRateIndex(0);
+    }
     setIsPlaying(true);
     wasPlayingRef.current = true;
-  }, []);
+  }, [isRewinding]);
 
   const handlePause = useCallback(function handlePause(): void {
     setIsPlaying(false);
@@ -608,7 +684,10 @@ function VideoAnnotator({
 
   function togglePlayPause(): void {
     if (videoRef.current) {
-      if (isPlaying) {
+      if (isRewinding) {
+        setRewindRateIndex(0);
+        stopRewind(false);
+      } else if (isPlaying) {
         videoRef.current.pause();
       } else {
         videoRef.current.play();
@@ -617,7 +696,26 @@ function VideoAnnotator({
   }
 
   function togglePlaybackRate(): void {
+    if (isRewinding) {
+      setRewindRateIndex(0);
+      stopRewind(true);
+    }
+
     setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
+  }
+
+  function toggleRewindRate(): void {
+    const nextRateIndex = (rewindRateIndex + 1) % PLAYBACK_RATES.length;
+
+    if (nextRateIndex === 0) {
+      setRewindRateIndex(0);
+      stopRewind(true);
+      return;
+    }
+
+    setPlaybackRateIndex(0);
+    setRewindRateIndex(nextRateIndex);
+    startRewind(nextRateIndex);
   }
 
   return (
@@ -646,9 +744,12 @@ function VideoAnnotator({
           {/* Video controls */}
           <div className="video-controls">
             <button className="play-pause-btn" onClick={togglePlayPause}>
-              {isPlaying ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
+              {isPlaying || isRewinding ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
             </button>
-            <button className="playback-speed-btn" onClick={togglePlaybackRate}>
+            <button className="transport-btn" onClick={toggleRewindRate}>
+              ⏪ {PLAYBACK_RATES[rewindRateIndex]}x
+            </button>
+            <button className="transport-btn" onClick={togglePlaybackRate}>
               ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
             </button>
             <input

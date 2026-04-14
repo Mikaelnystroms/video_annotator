@@ -20,13 +20,13 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: "18"
+        node-version-file: .nvmrc
         cache: "npm"
         cache-dependency-path: video_annotator/frontend/package-lock.json
 
     - name: Install frontend dependencies
       working-directory: video_annotator/frontend
-      run: npm ci
+      run: npm ci --no-audit --no-fund
 
     - name: Build frontend
       working-directory: video_annotator/frontend
@@ -60,7 +60,7 @@ jobs:
       url: https://pypi.org/p/streamlit-video-annotator
 
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
+      id-token: write
 
     steps:
     - name: Download all the dists
