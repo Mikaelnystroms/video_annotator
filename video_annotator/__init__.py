@@ -7,6 +7,7 @@ and time-range markers.
 
 from .video_annotator import (
     AnnotationData,
+    AnnotationPreset,
     DEFAULT_LABELS,
     ShapeData,
     __version__,
@@ -16,6 +17,7 @@ from .video_annotator import (
 __all__ = [
     "video_annotator",
     "AnnotationData",
+    "AnnotationPreset",
     "ShapeData",
     "DEFAULT_LABELS",
     "__version__",

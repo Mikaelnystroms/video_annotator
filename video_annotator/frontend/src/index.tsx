@@ -24,6 +24,7 @@ function onRender(event: Event): void {
   const height = args.height ?? 600;
   const existingAnnotations = args.existingAnnotations ?? [];
   const colors = args.colors ?? DEFAULT_COLORS;
+  const annotationPresets = args.annotationPresets ?? [];
 
   root.render(
     <React.StrictMode>
@@ -33,6 +34,7 @@ function onRender(event: Event): void {
         height={height}
         labels={args.labels}
         colors={colors}
+        annotationPresets={annotationPresets}
         theme={theme}
       />
     </React.StrictMode>

@@ -107,6 +107,23 @@ class AnnotationData(TypedDict):
     createdAt: str
 
 
+class AnnotationPreset(TypedDict, total=False):
+    """
+    Fast annotation preset.
+
+    Attributes:
+        label: Short button label shown in the component
+        comment: Comment saved with the annotation when this preset is selected
+        color: Optional CSS color string to apply
+        tool: Optional drawing tool ('rectangle', 'circle', 'path', or 'arrow')
+    """
+
+    label: str
+    comment: str
+    color: str
+    tool: str
+
+
 # Default UI labels (English)
 DEFAULT_LABELS: Dict[str, str] = {
     "play": "Play",
@@ -129,6 +146,8 @@ DEFAULT_LABELS: Dict[str, str] = {
     "commentPlaceholder": "Write a comment...",
     "drawInstruction": "Draw a {shape} on the video to mark a region",
     "quickSave": "Quick save",
+    "rewind": "Rewind",
+    "forward": "Forward",
 }
 
 
@@ -138,6 +157,7 @@ def video_annotator(
     height: int = 600,
     labels: Optional[Dict[str, str]] = None,
     colors: Optional[List[str]] = None,
+    annotation_presets: Optional[List[AnnotationPreset]] = None,
     key: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
@@ -157,10 +177,12 @@ def video_annotator(
             These will be shown during playback when the video reaches
             their time range.
         height: Component height in pixels. Default is 600.
-        labels: Dictionary of UI labels for internationalization.
+        labels: Dictionary of custom UI labels.
             See DEFAULT_LABELS for available keys.
         colors: List of color options for annotations.
             Default: ['#00ff00', '#ff0000', '#0000ff', '#ffff00', '#ff00ff', '#00ffff']
+        annotation_presets: Optional list of fast annotation presets. Selecting
+            a preset applies its color/tool and saves its comment on quick-save.
         key: Unique key for the component instance.
 
     Returns:
@@ -173,7 +195,7 @@ def video_annotator(
         result = video_annotator(
             video_url="https://storage.example.com/video.mp4",
             height=650,
-            labels={"play": "Spela", "pause": "Pausa"},  # Swedish
+            labels={"play": "Start", "pause": "Pause"},
         )
 
         if result:
@@ -191,6 +213,7 @@ def video_annotator(
         height=height,
         labels=merged_labels,
         colors=colors,
+        annotationPresets=annotation_presets or [],
         key=key,
         default=None,
     )

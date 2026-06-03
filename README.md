@@ -4,7 +4,7 @@ A custom Streamlit component for annotating videos with drawable regions and tim
 
 ## Features
 
-- **Video Playback Controls**: Play, pause, scrub, jump +/-10 seconds, and review at up to 16x speed
+- **Video Playback Controls**: Play, pause, scrub, and move forward or rewind at 1x, 2x, 4x, 8x, or 16x
 - **Multiple Drawing Tools**:
   - Rectangle
   - Circle
@@ -12,10 +12,11 @@ A custom Streamlit component for annotating videos with drawable regions and tim
   - Arrow
 - **Quick Save**: Draw on the video to immediately create an annotation with default rectangle mode
 - **Time-Range Annotations**: Mark start and end times manually when exact ranges are needed
+- **Annotation Presets**: One-click category buttons can apply the saved comment, color, and tool
 - **Color Customization**: Choose from multiple colors for annotations
 - **Comments**: Add text descriptions to annotations
 - **Annotation Management**: View, edit, and delete existing annotations
-- **Internationalization**: Customize all UI labels for different languages
+- **Custom Labels**: Customize UI labels when needed
 - **Responsive Design**: Adjustable height and responsive layout
 
 ## Installation
@@ -37,7 +38,6 @@ streamlit run app.py
 
 The demo app includes:
 - Public sample video with CORS enabled
-- Multiple language options (English, Swedish, Spanish, French, German)
 - Customizable colors and height
 - Live annotation preview and data display
 
@@ -45,7 +45,7 @@ The demo app includes:
 
 ```python
 import streamlit as st
-from streamlit_video_annotator import video_annotator
+from video_annotator import video_annotator
 
 # Basic usage
 result = video_annotator(
@@ -68,7 +68,7 @@ if result and result.get("deletedAnnotationId"):
 ### With Existing Annotations
 
 ```python
-from streamlit_video_annotator import video_annotator
+from video_annotator import video_annotator
 
 # Load existing annotations from your database
 existing_annotations = [
@@ -96,30 +96,31 @@ result = video_annotator(
 )
 ```
 
-### Custom Labels (Internationalization)
+### Custom Labels
 
 ```python
-# Swedish labels example
-swedish_labels = {
-    "play": "Spela",
-    "pause": "Pausa",
-    "tools": "Verktyg",
-    "rectangle": "Rektangel",
-    "circle": "Cirkel",
-    "freedraw": "Frihand",
-    "arrow": "Pil",
-    "color": "Färg",
-    "markStart": "Markera Start",
-    "markEnd": "Markera Slut",
-    "saveAnnotation": "Spara Annotering",
-    "cancel": "Avbryt",
-    "delete": "Ta bort",
-    "quickSave": "Snabbspara"
+custom_labels = {
+    "play": "Start",
+    "pause": "Pause",
+    "tools": "Drawing tools",
+    "rectangle": "Box",
+    "circle": "Circle",
+    "freedraw": "Free draw",
+    "arrow": "Arrow",
+    "color": "Color",
+    "markStart": "Set Start",
+    "markEnd": "Set End",
+    "saveAnnotation": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "quickSave": "Quick save",
+    "rewind": "Rewind",
+    "forward": "Forward"
 }
 
 result = video_annotator(
     video_url="video.mp4",
-    labels=swedish_labels
+    labels=custom_labels
 )
 ```
 
@@ -129,6 +130,30 @@ result = video_annotator(
 result = video_annotator(
     video_url="video.mp4",
     colors=["#FF5733", "#33FF57", "#3357FF", "#F033FF"]
+)
+```
+
+### Annotation Presets
+
+```python
+from video_annotator import video_annotator
+
+result = video_annotator(
+    video_url="video.mp4",
+    annotation_presets=[
+        {
+            "label": "Subject",
+            "comment": "Subject",
+            "color": "#00ff00",
+            "tool": "rectangle",
+        },
+        {
+            "label": "Interaction",
+            "comment": "Interaction",
+            "color": "#0000ff",
+            "tool": "rectangle",
+        },
+    ],
 )
 ```
 
@@ -143,6 +168,7 @@ video_annotator(
     height: int = 800,
     labels: Optional[Dict[str, str]] = None,
     colors: Optional[List[str]] = None,
+    annotation_presets: Optional[List[AnnotationPreset]] = None,
     key: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]
 ```
@@ -152,8 +178,9 @@ video_annotator(
 - `video_url` (str): Direct URL to the video file. Supports MP4, WebM, and other browser-compatible formats. Note: YouTube URLs are not supported.
 - `existing_annotations` (list, optional): List of annotation dictionaries to display.
 - `height` (int, optional): Component height in pixels. Default: 600.
-- `labels` (dict, optional): Custom UI labels for internationalization.
+- `labels` (dict, optional): Custom UI labels.
 - `colors` (list, optional): List of color hex codes for annotations. Default: ['#00ff00', '#ff0000', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'].
+- `annotation_presets` (list, optional): Fast category buttons. Each preset can set `label`, `comment`, `color`, and `tool`.
 - `key` (str, optional): Unique key for the component instance.
 
 **Returns:**

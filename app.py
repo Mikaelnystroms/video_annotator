@@ -37,107 +37,6 @@ height = st.sidebar.slider(
     step=50
 )
 
-# Language selection
-st.sidebar.subheader("Language")
-language = st.sidebar.selectbox(
-    "UI Language",
-    options=["English", "Swedish", "Spanish", "French", "German"],
-    help="Change the UI labels"
-)
-
-# Define language labels
-LABELS = {
-    "English": DEFAULT_LABELS,
-    "Swedish": {
-        "play": "Spela",
-        "pause": "Pausa",
-        "tools": "Verktyg",
-        "rectangle": "Rektangel",
-        "circle": "Cirkel",
-        "freedraw": "Frihand",
-        "arrow": "Pil",
-        "color": "Färg",
-        "markStart": "Markera Start",
-        "markEnd": "Markera Slut",
-        "start": "Start",
-        "end": "Slut",
-        "saveAnnotation": "Spara Annotering",
-        "cancel": "Avbryt",
-        "annotations": "Annoteringar",
-        "noAnnotations": "Inga annoteringar än.",
-        "delete": "Ta bort",
-        "commentPlaceholder": "Skriv en kommentar...",
-        "drawInstruction": "Rita en {shape} på videon för att markera ett område",
-        "quickSave": "Snabbspara",
-    },
-    "Spanish": {
-        "play": "Reproducir",
-        "pause": "Pausar",
-        "tools": "Herramientas",
-        "rectangle": "Rectángulo",
-        "circle": "Círculo",
-        "freedraw": "Dibujo libre",
-        "arrow": "Flecha",
-        "color": "Color",
-        "markStart": "Marcar inicio",
-        "markEnd": "Marcar fin",
-        "start": "Inicio",
-        "end": "Fin",
-        "saveAnnotation": "Guardar anotación",
-        "cancel": "Cancelar",
-        "annotations": "Anotaciones",
-        "noAnnotations": "Aún no hay anotaciones.",
-        "delete": "Eliminar",
-        "commentPlaceholder": "Escribe un comentario...",
-        "drawInstruction": "Dibuja un {shape} en el video para marcar una región",
-        "quickSave": "Guardado rápido",
-    },
-    "French": {
-        "play": "Jouer",
-        "pause": "Pause",
-        "tools": "Outils",
-        "rectangle": "Rectangle",
-        "circle": "Cercle",
-        "freedraw": "Dessin libre",
-        "arrow": "Flèche",
-        "color": "Couleur",
-        "markStart": "Marquer le début",
-        "markEnd": "Marquer la fin",
-        "start": "Début",
-        "end": "Fin",
-        "saveAnnotation": "Enregistrer l'annotation",
-        "cancel": "Annuler",
-        "annotations": "Annotations",
-        "noAnnotations": "Pas encore d'annotations.",
-        "delete": "Supprimer",
-        "commentPlaceholder": "Écrire un commentaire...",
-        "drawInstruction": "Dessinez un {shape} sur la vidéo pour marquer une région",
-        "quickSave": "Enregistrement rapide",
-    },
-    "German": {
-        "play": "Abspielen",
-        "pause": "Pause",
-        "tools": "Werkzeuge",
-        "rectangle": "Rechteck",
-        "circle": "Kreis",
-        "freedraw": "Freihand",
-        "arrow": "Pfeil",
-        "color": "Farbe",
-        "markStart": "Start markieren",
-        "markEnd": "Ende markieren",
-        "start": "Start",
-        "end": "Ende",
-        "saveAnnotation": "Anmerkung speichern",
-        "cancel": "Abbrechen",
-        "annotations": "Anmerkungen",
-        "noAnnotations": "Noch keine Anmerkungen.",
-        "delete": "Löschen",
-        "commentPlaceholder": "Schreibe einen Kommentar...",
-        "drawInstruction": "Zeichne ein {shape} auf das Video, um einen Bereich zu markieren",
-        "quickSave": "Schnellspeichern",
-    }
-}
-
 # Color options
 st.sidebar.subheader("Colors")
 use_custom_colors = st.sidebar.checkbox("Use custom colors")
@@ -149,6 +48,28 @@ if use_custom_colors:
         st.sidebar.color_picker("Color 3", "#3357FF"),
         st.sidebar.color_picker("Color 4", "#F033FF"),
     ]
+
+# Generic example presets for the demo app
+annotation_presets = [
+    {
+        "label": "Example 1",
+        "comment": "Example 1",
+        "color": "#00ff00",
+        "tool": "rectangle",
+    },
+    {
+        "label": "Example 2",
+        "comment": "Example 2",
+        "color": "#0000ff",
+        "tool": "rectangle",
+    },
+    {
+        "label": "Example 3",
+        "comment": "Example 3",
+        "color": "#ff0000",
+        "tool": "rectangle",
+    },
+]
 
 # Initialize session state for annotations
 if "annotations" not in st.session_state:
@@ -165,8 +86,9 @@ with col1:
         video_url=video_url,
         existing_annotations=st.session_state.annotations,
         height=height,
-        labels=LABELS[language],
+        labels=DEFAULT_LABELS,
         colors=colors,
+        annotation_presets=annotation_presets,
         key="video_annotator"
     )
 
@@ -224,9 +146,9 @@ st.markdown("""
 ### How to Use
 
 1. **Quick Save**: Draw on the video to create an annotation immediately.
-2. **Review Faster**: Use the speed button for 2x, 4x, 8x, or 16x playback and the +/-10s buttons to jump.
-3. **Optional Details**: Turn off "Quick save" to mark exact start/end times and add a comment before saving.
-4. **Choose Tool/Color**: Rectangle is selected by default; switch tools or colors when needed.
+2. **Pick a Preset**: Use a category button to apply the right comment, color, and rectangle tool.
+3. **Review Faster**: Use Forward or Rewind at 1x, 2x, 4x, 8x, or 16x.
+4. **Optional Details**: Turn off "Quick save" to mark exact start/end times and add a comment before saving.
 
 ### Installation
 
@@ -237,7 +159,7 @@ pip install streamlit-video-annotator
 ### Code Example
 
 ```python
-from streamlit_video_annotator import video_annotator
+from video_annotator import video_annotator
 
 result = video_annotator(
     video_url="https://example.com/video.mp4",

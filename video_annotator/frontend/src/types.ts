@@ -82,7 +82,17 @@ export interface Annotation {
 export type DrawingTool = 'rectangle' | 'circle' | 'path' | 'arrow' | null;
 
 /**
- * UI Labels for internationalization
+ * Reusable annotation preset for fast category/color selection.
+ */
+export interface AnnotationPreset {
+  label: string;
+  comment: string;
+  color?: string;
+  tool?: DrawingTool;
+}
+
+/**
+ * UI labels
  */
 export interface Labels {
   play: string;
@@ -105,6 +115,8 @@ export interface Labels {
   commentPlaceholder: string;
   drawInstruction: string;
   quickSave?: string;
+  rewind?: string;
+  forward?: string;
 }
 
 /**
@@ -116,6 +128,7 @@ export interface ComponentArgs {
   height: number;
   labels: Labels;
   colors?: string[];
+  annotationPresets?: AnnotationPreset[];
 }
 
 /**

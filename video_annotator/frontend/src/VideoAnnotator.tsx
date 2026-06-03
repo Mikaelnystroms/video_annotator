@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Streamlit } from 'streamlit-component-lib';
-import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS, Theme } from './types';
+import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS, Theme, AnnotationPreset } from './types';
 import './VideoAnnotator.css';
 
 interface Props {
@@ -16,12 +16,12 @@ interface Props {
   height: number;
   labels: Labels;
   colors?: string[];
+  annotationPresets?: AnnotationPreset[];
   theme?: Theme;
 }
 
 const PLAYBACK_RATES = [1, 2, 4, 8, 16] as const;
 const DEFAULT_ANNOTATION_DURATION_SECONDS = 2;
-const SEEK_STEP_SECONDS = 10;
 
 /** Generate a UUID v4 */
 function generateId(): string {
@@ -182,6 +182,7 @@ function VideoAnnotator({
   height,
   labels,
   colors = DEFAULT_COLORS,
+  annotationPresets = [],
   theme,
 }: Props): JSX.Element {
   // Refs
@@ -201,8 +202,11 @@ function VideoAnnotator({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
-  const [playbackRateIndex, setPlaybackRateIndex] = useState(1);
+  const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
+  const [rewindRateIndex, setRewindRateIndex] = useState(0);
+  const [isRewinding, setIsRewinding] = useState(false);
   const [quickSaveEnabled, setQuickSaveEnabled] = useState(true);
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null);
 
   const [selectedTool, setSelectedTool] = useState<DrawingTool>('rectangle');
   const [selectedColor, setSelectedColor] = useState(colors[0]);
@@ -216,6 +220,7 @@ function VideoAnnotator({
   const [comment, setComment] = useState('');
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const selectedPreset = selectedPresetIndex === null ? null : annotationPresets[selectedPresetIndex] ?? null;
 
   // Set CSS variables from Streamlit theme
   useEffect(function applyTheme(): void {
@@ -251,14 +256,58 @@ function VideoAnnotator({
 
   // Apply playback rate when video is ready or rate changes
   useEffect(function applyPlaybackRate(): void {
-    if (videoRef.current) {
+    if (videoRef.current && !isRewinding) {
       videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
     }
-  }, [videoLoaded, playbackRateIndex]);
+  }, [videoLoaded, playbackRateIndex, isRewinding]);
+
+  // Simulate rewind because negative HTML video playbackRate is not reliable across browsers.
+  useEffect(function runRewind(): void | (() => void) {
+    if (!isRewinding) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+    const videoElement: HTMLVideoElement = video;
+
+    let animationFrameId = 0;
+    let lastTimestamp: number | null = null;
+    const rewindRate = PLAYBACK_RATES[rewindRateIndex];
+
+    function tick(timestamp: number): void {
+      if (lastTimestamp === null) {
+        lastTimestamp = timestamp;
+      }
+
+      const elapsedSeconds = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      if (videoElement.currentTime <= 0) {
+        videoElement.currentTime = 0;
+        setCurrentTime(0);
+        savedTimeRef.current = 0;
+        setIsRewinding(false);
+        setIsPlaying(false);
+        wasPlayingRef.current = false;
+        return;
+      }
+
+      const nextTime = Math.max(0, videoElement.currentTime - elapsedSeconds * rewindRate);
+      videoElement.currentTime = nextTime;
+      setCurrentTime(nextTime);
+      savedTimeRef.current = nextTime;
+      animationFrameId = requestAnimationFrame(tick);
+    }
+
+    animationFrameId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isRewinding, rewindRateIndex]);
 
   // Reset playback rate when video source changes
-  useEffect(function resetPlaybackRate(): void {
-    setPlaybackRateIndex(1);
+  useEffect(function resetPlaybackControls(): void {
+    setPlaybackRateIndex(0);
+    setRewindRateIndex(0);
+    setIsRewinding(false);
   }, [videoUrl]);
 
   // Handle canvas resize with ResizeObserver
@@ -300,14 +349,17 @@ function VideoAnnotator({
   }, []);
 
   const handlePlay = useCallback(function handlePlay(): void {
+    setIsRewinding(false);
     setIsPlaying(true);
     wasPlayingRef.current = true;
   }, []);
 
   const handlePause = useCallback(function handlePause(): void {
-    setIsPlaying(false);
-    wasPlayingRef.current = false;
-  }, []);
+    if (!isRewinding) {
+      setIsPlaying(false);
+      wasPlayingRef.current = false;
+    }
+  }, [isRewinding]);
 
   // Get shapes visible at current time
   const getVisibleShapes = useCallback(function getVisibleShapes(): Shape[] {
@@ -570,6 +622,11 @@ function VideoAnnotator({
     return { startTime, endTime };
   }
 
+  function getAnnotationComment(annotationComment: string): string {
+    if (annotationComment.trim()) return annotationComment;
+    return selectedPreset?.comment ?? '';
+  }
+
   function saveAnnotation(shape: Shape, annotationComment = ''): void {
     const { startTime, endTime } = getAnnotationTimeRange();
 
@@ -578,7 +635,7 @@ function VideoAnnotator({
       startTime,
       endTime,
       shape,
-      comment: annotationComment,
+      comment: getAnnotationComment(annotationComment),
       createdAt: new Date().toISOString(),
     };
 
@@ -628,29 +685,62 @@ function VideoAnnotator({
 
   function handleSeekToAnnotation(annotation: Annotation): void {
     if (videoRef.current) {
+      setIsRewinding(false);
       videoRef.current.currentTime = annotation.startTime;
     }
   }
 
   function togglePlayPause(): void {
     if (videoRef.current) {
-      if (isPlaying) {
+      if (isPlaying || isRewinding) {
+        setIsRewinding(false);
         videoRef.current.pause();
+        setIsPlaying(false);
+        wasPlayingRef.current = false;
       } else {
+        setIsRewinding(false);
+        videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
         videoRef.current.play();
       }
     }
   }
 
-  function togglePlaybackRate(): void {
-    setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
-  }
-
-  function seekBy(seconds: number): void {
+  function playForward(): void {
     const video = videoRef.current;
     if (!video) return;
 
-    video.currentTime = Math.min(Math.max(video.currentTime + seconds, 0), duration || video.currentTime + seconds);
+    const nextIndex = isPlaying && !isRewinding ? (playbackRateIndex + 1) % PLAYBACK_RATES.length : playbackRateIndex;
+    setIsRewinding(false);
+    setPlaybackRateIndex(nextIndex);
+    video.playbackRate = PLAYBACK_RATES[nextIndex];
+    video.play().catch(() => {});
+    setIsPlaying(true);
+    wasPlayingRef.current = true;
+  }
+
+  function rewind(): void {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const nextIndex = isRewinding ? (rewindRateIndex + 1) % PLAYBACK_RATES.length : rewindRateIndex;
+    video.pause();
+    setRewindRateIndex(nextIndex);
+    setIsRewinding(true);
+    setIsPlaying(false);
+    wasPlayingRef.current = true;
+  }
+
+  function handleSelectPreset(preset: AnnotationPreset, index: number): void {
+    setSelectedPresetIndex(index);
+    setComment(preset.comment);
+    if (preset.color) {
+      setSelectedColor(preset.color);
+    }
+    if (preset.tool !== undefined) {
+      setSelectedTool(preset.tool);
+    } else {
+      setSelectedTool('rectangle');
+    }
   }
 
   return (
@@ -679,16 +769,13 @@ function VideoAnnotator({
           {/* Video controls */}
           <div className="video-controls">
             <button className="play-pause-btn" onClick={togglePlayPause}>
-              {isPlaying ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
+              {isPlaying || isRewinding ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
             </button>
-            <button className="seek-btn" onClick={() => seekBy(-SEEK_STEP_SECONDS)}>
-              -{SEEK_STEP_SECONDS}s
+            <button className={`rewind-speed-btn ${isRewinding ? 'active' : ''}`} onClick={rewind}>
+              ⏪ {labels.rewind || 'Rewind'} {PLAYBACK_RATES[rewindRateIndex]}x
             </button>
-            <button className="playback-speed-btn" onClick={togglePlaybackRate}>
-              ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
-            </button>
-            <button className="seek-btn" onClick={() => seekBy(SEEK_STEP_SECONDS)}>
-              +{SEEK_STEP_SECONDS}s
+            <button className={`playback-speed-btn ${isPlaying && !isRewinding ? 'active' : ''}`} onClick={playForward}>
+              ▶ {labels.forward || 'Forward'} {PLAYBACK_RATES[playbackRateIndex]}x
             </button>
             <input
               type="range"
@@ -749,11 +836,34 @@ function VideoAnnotator({
                   key={color}
                   className={`color-btn ${selectedColor === color ? 'active' : ''}`}
                   style={{ backgroundColor: color }}
-                  onClick={() => setSelectedColor(color)}
+                  onClick={() => {
+                    setSelectedColor(color);
+                    setSelectedPresetIndex(null);
+                  }}
                   disabled={!!pendingShape}
                 />
               ))}
             </div>
+
+            {annotationPresets.length > 0 && (
+              <div className="preset-section">
+                {annotationPresets.map((preset, index) => (
+                  <button
+                    key={`${preset.label}-${index}`}
+                    className={`preset-btn ${selectedPresetIndex === index ? 'active' : ''}`}
+                    onClick={() => handleSelectPreset(preset, index)}
+                    disabled={!!pendingShape}
+                    title={preset.comment}
+                  >
+                    <span
+                      className="preset-color"
+                      style={{ backgroundColor: preset.color || selectedColor }}
+                    />
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <label className="quick-save-toggle">
               <input
