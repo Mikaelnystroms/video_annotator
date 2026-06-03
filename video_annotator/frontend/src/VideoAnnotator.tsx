@@ -19,7 +19,9 @@ interface Props {
   theme?: Theme;
 }
 
-const PLAYBACK_RATES = [1, 2, 4] as const;
+const PLAYBACK_RATES = [1, 2, 4, 8, 16] as const;
+const DEFAULT_ANNOTATION_DURATION_SECONDS = 2;
+const SEEK_STEP_SECONDS = 10;
 
 /** Generate a UUID v4 */
 function generateId(): string {
@@ -191,6 +193,7 @@ function VideoAnnotator({
   const savedTimeRef = useRef(0);
   const wasPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
+  const drawStartTimeRef = useRef(0);
 
   // State
   const [annotations, setAnnotations] = useState<Annotation[]>(existingAnnotations);
@@ -198,9 +201,10 @@ function VideoAnnotator({
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoLoaded, setVideoLoaded] = useState(false);
-  const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
+  const [playbackRateIndex, setPlaybackRateIndex] = useState(1);
+  const [quickSaveEnabled, setQuickSaveEnabled] = useState(true);
 
-  const [selectedTool, setSelectedTool] = useState<DrawingTool>(null);
+  const [selectedTool, setSelectedTool] = useState<DrawingTool>('rectangle');
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
@@ -254,7 +258,7 @@ function VideoAnnotator({
 
   // Reset playback rate when video source changes
   useEffect(function resetPlaybackRate(): void {
-    setPlaybackRateIndex(0);
+    setPlaybackRateIndex(1);
   }, [videoUrl]);
 
   // Handle canvas resize with ResizeObserver
@@ -412,6 +416,7 @@ function VideoAnnotator({
     if (!selectedTool || pendingShape) return;
 
     const coords = getNormalizedCoords(e);
+    drawStartTimeRef.current = videoRef.current?.currentTime ?? currentTime;
     setIsDrawing(true);
     setDrawStart(coords);
 
@@ -520,7 +525,11 @@ function VideoAnnotator({
     if (!isDrawing || !currentShape) return;
 
     if (shapeHasValidSize(currentShape)) {
-      setPendingShape(currentShape);
+      if (quickSaveEnabled) {
+        saveAnnotation(currentShape);
+      } else {
+        setPendingShape(currentShape);
+      }
     }
 
     setIsDrawing(false);
@@ -544,16 +553,32 @@ function VideoAnnotator({
     }
   }
 
-  // Save annotation
-  function handleSave(): void {
-    if (!pendingShape || markedStartTime === null || markedEndTime === null) return;
+  function getAnnotationTimeRange(): { startTime: number; endTime: number } {
+    const videoTime = videoRef.current?.currentTime ?? currentTime;
+    const fallbackStart = Math.min(drawStartTimeRef.current, videoTime);
+    let startTime = markedStartTime ?? fallbackStart;
+    let endTime = markedEndTime ?? Math.max(drawStartTimeRef.current, videoTime);
+
+    if (endTime <= startTime) {
+      endTime = Math.min(duration || startTime + DEFAULT_ANNOTATION_DURATION_SECONDS, startTime + DEFAULT_ANNOTATION_DURATION_SECONDS);
+    }
+
+    if (endTime <= startTime) {
+      startTime = Math.max(0, startTime - DEFAULT_ANNOTATION_DURATION_SECONDS);
+    }
+
+    return { startTime, endTime };
+  }
+
+  function saveAnnotation(shape: Shape, annotationComment = ''): void {
+    const { startTime, endTime } = getAnnotationTimeRange();
 
     const newAnnotation: Annotation = {
       id: generateId(),
-      startTime: markedStartTime,
-      endTime: markedEndTime,
-      shape: pendingShape,
-      comment,
+      startTime,
+      endTime,
+      shape,
+      comment: annotationComment,
       createdAt: new Date().toISOString(),
     };
 
@@ -568,13 +593,16 @@ function VideoAnnotator({
     setMarkedStartTime(null);
     setMarkedEndTime(null);
     setComment('');
-    setSelectedTool(null);
 
     // Send to Streamlit
-    setTimeout(function notifyStreamlit(): void {
-      const value: ComponentValue = { annotations: newAnnotations, newAnnotation };
-      Streamlit.setComponentValue(value);
-    }, 100);
+    const value: ComponentValue = { annotations: newAnnotations, newAnnotation };
+    Streamlit.setComponentValue(value);
+  }
+
+  // Save annotation
+  function handleSave(): void {
+    if (!pendingShape) return;
+    saveAnnotation(pendingShape, comment);
   }
 
   function handleCancel(): void {
@@ -594,10 +622,8 @@ function VideoAnnotator({
     setAnnotations(newAnnotations);
     sentDeletionsRef.current.add(id);
 
-    setTimeout(function notifyStreamlit(): void {
-      const value: ComponentValue = { annotations: newAnnotations, deletedAnnotationId: id };
-      Streamlit.setComponentValue(value);
-    }, 100);
+    const value: ComponentValue = { annotations: newAnnotations, deletedAnnotationId: id };
+    Streamlit.setComponentValue(value);
   }
 
   function handleSeekToAnnotation(annotation: Annotation): void {
@@ -618,6 +644,13 @@ function VideoAnnotator({
 
   function togglePlaybackRate(): void {
     setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
+  }
+
+  function seekBy(seconds: number): void {
+    const video = videoRef.current;
+    if (!video) return;
+
+    video.currentTime = Math.min(Math.max(video.currentTime + seconds, 0), duration || video.currentTime + seconds);
   }
 
   return (
@@ -648,8 +681,14 @@ function VideoAnnotator({
             <button className="play-pause-btn" onClick={togglePlayPause}>
               {isPlaying ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
             </button>
+            <button className="seek-btn" onClick={() => seekBy(-SEEK_STEP_SECONDS)}>
+              -{SEEK_STEP_SECONDS}s
+            </button>
             <button className="playback-speed-btn" onClick={togglePlaybackRate}>
               ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
+            </button>
+            <button className="seek-btn" onClick={() => seekBy(SEEK_STEP_SECONDS)}>
+              +{SEEK_STEP_SECONDS}s
             </button>
             <input
               type="range"
@@ -715,6 +754,15 @@ function VideoAnnotator({
                 />
               ))}
             </div>
+
+            <label className="quick-save-toggle">
+              <input
+                type="checkbox"
+                checked={quickSaveEnabled}
+                onChange={(e) => setQuickSaveEnabled(e.target.checked)}
+              />
+              {labels.quickSave || 'Quick save'}
+            </label>
           </div>
 
           {/* Time markers */}
@@ -740,7 +788,7 @@ function VideoAnnotator({
           </div>
 
           {/* Annotation form */}
-          {pendingShape && markedStartTime !== null && markedEndTime !== null && (
+          {pendingShape && (
             <div className="annotation-form">
               <textarea
                 placeholder={labels.commentPlaceholder}
@@ -804,7 +852,7 @@ function VideoAnnotator({
       </div>
 
       {/* Instruction banner */}
-      {selectedTool && !pendingShape && (
+      {selectedTool && !pendingShape && !quickSaveEnabled && (
         <div className="instruction-banner">
           {labels.drawInstruction.replace('{shape}', getShapeName(selectedTool, labels))}
         </div>

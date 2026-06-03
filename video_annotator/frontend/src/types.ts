@@ -104,6 +104,7 @@ export interface Labels {
   delete: string;
   commentPlaceholder: string;
   drawInstruction: string;
+  quickSave?: string;
 }
 
 /**

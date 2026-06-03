@@ -24,7 +24,7 @@ st.sidebar.header("Configuration")
 # Video URL input
 video_url = st.sidebar.text_input(
     "Video URL",
-    value="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    value="https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4",
     help="Direct URL to video file (MP4, WebM, etc.)"
 )
 
@@ -68,6 +68,7 @@ LABELS = {
         "delete": "Ta bort",
         "commentPlaceholder": "Skriv en kommentar...",
         "drawInstruction": "Rita en {shape} på videon för att markera ett område",
+        "quickSave": "Snabbspara",
     },
     "Spanish": {
         "play": "Reproducir",
@@ -89,6 +90,7 @@ LABELS = {
         "delete": "Eliminar",
         "commentPlaceholder": "Escribe un comentario...",
         "drawInstruction": "Dibuja un {shape} en el video para marcar una región",
+        "quickSave": "Guardado rápido",
     },
     "French": {
         "play": "Jouer",
@@ -110,6 +112,7 @@ LABELS = {
         "delete": "Supprimer",
         "commentPlaceholder": "Écrire un commentaire...",
         "drawInstruction": "Dessinez un {shape} sur la vidéo pour marquer une région",
+        "quickSave": "Enregistrement rapide",
     },
     "German": {
         "play": "Abspielen",
@@ -131,6 +134,7 @@ LABELS = {
         "delete": "Löschen",
         "commentPlaceholder": "Schreibe einen Kommentar...",
         "drawInstruction": "Zeichne ein {shape} auf das Video, um einen Bereich zu markieren",
+        "quickSave": "Schnellspeichern",
     }
 }
 
@@ -212,19 +216,17 @@ with col2:
                     "createdAt": ann["createdAt"]
                 })
     else:
-        st.info("No annotations yet. Start by marking a time range and drawing a shape on the video!")
+        st.info("No annotations yet. Draw on the video to quick-save an annotation.")
 
 # Footer
 st.markdown("---")
 st.markdown("""
 ### How to Use
 
-1. **Mark Time Range**: Click "Mark Start" and "Mark End" buttons while the video plays
-2. **Choose Tool**: Select Rectangle, Circle, Freedraw, or Arrow
-3. **Pick Color**: Choose a color for your annotation
-4. **Draw**: Click and drag on the video to draw your shape
-5. **Add Comment**: Write a description of what you're annotating
-6. **Save**: Click "Save Annotation" to store it
+1. **Quick Save**: Draw on the video to create an annotation immediately.
+2. **Review Faster**: Use the speed button for 2x, 4x, 8x, or 16x playback and the +/-10s buttons to jump.
+3. **Optional Details**: Turn off "Quick save" to mark exact start/end times and add a comment before saving.
+4. **Choose Tool/Color**: Rectangle is selected by default; switch tools or colors when needed.
 
 ### Installation
 

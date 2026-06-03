@@ -4,13 +4,14 @@ A custom Streamlit component for annotating videos with drawable regions and tim
 
 ## Features
 
-- **Video Playback Controls**: Play, pause, and scrub through videos
+- **Video Playback Controls**: Play, pause, scrub, jump +/-10 seconds, and review at up to 16x speed
 - **Multiple Drawing Tools**:
   - Rectangle
   - Circle
   - Freedraw (path)
   - Arrow
-- **Time-Range Annotations**: Mark start and end times for each annotation
+- **Quick Save**: Draw on the video to immediately create an annotation with default rectangle mode
+- **Time-Range Annotations**: Mark start and end times manually when exact ranges are needed
 - **Color Customization**: Choose from multiple colors for annotations
 - **Comments**: Add text descriptions to annotations
 - **Annotation Management**: View, edit, and delete existing annotations
@@ -35,7 +36,7 @@ streamlit run app.py
 ```
 
 The demo app includes:
-- Sample video (Big Buck Bunny)
+- Public sample video with CORS enabled
 - Multiple language options (English, Swedish, Spanish, French, German)
 - Customizable colors and height
 - Live annotation preview and data display
@@ -112,7 +113,8 @@ swedish_labels = {
     "markEnd": "Markera Slut",
     "saveAnnotation": "Spara Annotering",
     "cancel": "Avbryt",
-    "delete": "Ta bort"
+    "delete": "Ta bort",
+    "quickSave": "Snabbspara"
 }
 
 result = video_annotator(

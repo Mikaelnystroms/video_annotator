@@ -4,7 +4,8 @@ A custom Streamlit component for annotating videos with drawable regions and tim
 
 ## Features
 
-- **Time Range Selection**: Mark start and end times to define annotation ranges
+- **Quick Save**: Draw on the video to immediately create an annotation
+- **Time Range Selection**: Mark start and end times to define exact annotation ranges when needed
 - **Shape Drawing**: Draw rectangles or circles on the video to highlight regions
 - **Visual Overlays**: Shapes appear during playback when video reaches annotated time ranges
 - **Comments**: Add text comments to each annotation
@@ -108,6 +109,7 @@ if result:
     "delete": "Delete",
     "commentPlaceholder": "Write a comment...",
     "drawInstruction": "Draw a {shape} on the video to mark a region",
+    "quickSave": "Quick save",
 }
 ```
 
