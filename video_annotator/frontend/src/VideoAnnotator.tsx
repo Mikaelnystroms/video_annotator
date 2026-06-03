@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Streamlit } from 'streamlit-component-lib';
-import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS, Theme } from './types';
+import { Annotation, Shape, DrawingTool, Labels, ComponentValue, DEFAULT_COLORS, Theme, AnnotationPreset } from './types';
 import './VideoAnnotator.css';
 
 interface Props {
@@ -16,11 +16,12 @@ interface Props {
   height: number;
   labels: Labels;
   colors?: string[];
+  annotationPresets?: AnnotationPreset[];
   theme?: Theme;
 }
 
-const PLAYBACK_RATES = [1, 2, 4] as const;
-const REWIND_TICK_MS = 50;
+const PLAYBACK_RATES = [1, 2, 4, 8, 16] as const;
+const DEFAULT_ANNOTATION_DURATION_SECONDS = 2;
 
 /** Generate a UUID v4 */
 function generateId(): string {
@@ -181,6 +182,7 @@ function VideoAnnotator({
   height,
   labels,
   colors = DEFAULT_COLORS,
+  annotationPresets = [],
   theme,
 }: Props): JSX.Element {
   // Refs
@@ -192,9 +194,7 @@ function VideoAnnotator({
   const savedTimeRef = useRef(0);
   const wasPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
-  const rewindIntervalRef = useRef<number | null>(null);
-  const rewindLastTickRef = useRef<number | null>(null);
-  const rewindResumePlaybackRef = useRef(false);
+  const drawStartTimeRef = useRef(0);
 
   // State
   const [annotations, setAnnotations] = useState<Annotation[]>(existingAnnotations);
@@ -205,8 +205,10 @@ function VideoAnnotator({
   const [playbackRateIndex, setPlaybackRateIndex] = useState(0);
   const [rewindRateIndex, setRewindRateIndex] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
+  const [quickSaveEnabled, setQuickSaveEnabled] = useState(true);
+  const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(null);
 
-  const [selectedTool, setSelectedTool] = useState<DrawingTool>(null);
+  const [selectedTool, setSelectedTool] = useState<DrawingTool>('rectangle');
   const [selectedColor, setSelectedColor] = useState(colors[0]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
@@ -218,6 +220,7 @@ function VideoAnnotator({
   const [comment, setComment] = useState('');
 
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const selectedPreset = selectedPresetIndex === null ? null : annotationPresets[selectedPresetIndex] ?? null;
 
   function clearRewindLoop(): void {
     if (rewindIntervalRef.current !== null) {
@@ -309,16 +312,58 @@ function VideoAnnotator({
 
   // Apply playback rate when video is ready or rate changes
   useEffect(function applyPlaybackRate(): void {
-    if (videoRef.current) {
-      videoRef.current.playbackRate = isRewinding ? 1 : PLAYBACK_RATES[playbackRateIndex];
+    if (videoRef.current && !isRewinding) {
+      videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
     }
   }, [videoLoaded, playbackRateIndex, isRewinding]);
 
+  // Simulate rewind because negative HTML video playbackRate is not reliable across browsers.
+  useEffect(function runRewind(): void | (() => void) {
+    if (!isRewinding) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+    const videoElement: HTMLVideoElement = video;
+
+    let animationFrameId = 0;
+    let lastTimestamp: number | null = null;
+    const rewindRate = PLAYBACK_RATES[rewindRateIndex];
+
+    function tick(timestamp: number): void {
+      if (lastTimestamp === null) {
+        lastTimestamp = timestamp;
+      }
+
+      const elapsedSeconds = (timestamp - lastTimestamp) / 1000;
+      lastTimestamp = timestamp;
+
+      if (videoElement.currentTime <= 0) {
+        videoElement.currentTime = 0;
+        setCurrentTime(0);
+        savedTimeRef.current = 0;
+        setIsRewinding(false);
+        setIsPlaying(false);
+        wasPlayingRef.current = false;
+        return;
+      }
+
+      const nextTime = Math.max(0, videoElement.currentTime - elapsedSeconds * rewindRate);
+      videoElement.currentTime = nextTime;
+      setCurrentTime(nextTime);
+      savedTimeRef.current = nextTime;
+      animationFrameId = requestAnimationFrame(tick);
+    }
+
+    animationFrameId = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isRewinding, rewindRateIndex]);
+
   // Reset playback rate when video source changes
-  useEffect(function resetPlaybackRate(): void {
-    stopRewind(false);
+  useEffect(function resetPlaybackControls(): void {
     setPlaybackRateIndex(0);
     setRewindRateIndex(0);
+    setIsRewinding(false);
   }, [videoUrl]);
 
   useEffect(function cleanupRewindLoop(): () => void {
@@ -366,20 +411,17 @@ function VideoAnnotator({
   }, []);
 
   const handlePlay = useCallback(function handlePlay(): void {
-    if (isRewinding) {
-      clearRewindLoop();
-      rewindResumePlaybackRef.current = false;
-      setIsRewinding(false);
-      setRewindRateIndex(0);
-    }
+    setIsRewinding(false);
     setIsPlaying(true);
     wasPlayingRef.current = true;
   }, [isRewinding]);
 
   const handlePause = useCallback(function handlePause(): void {
-    setIsPlaying(false);
-    wasPlayingRef.current = false;
-  }, []);
+    if (!isRewinding) {
+      setIsPlaying(false);
+      wasPlayingRef.current = false;
+    }
+  }, [isRewinding]);
 
   // Get shapes visible at current time
   const getVisibleShapes = useCallback(function getVisibleShapes(): Shape[] {
@@ -488,6 +530,7 @@ function VideoAnnotator({
     if (!selectedTool || pendingShape) return;
 
     const coords = getNormalizedCoords(e);
+    drawStartTimeRef.current = videoRef.current?.currentTime ?? currentTime;
     setIsDrawing(true);
     setDrawStart(coords);
 
@@ -596,7 +639,11 @@ function VideoAnnotator({
     if (!isDrawing || !currentShape) return;
 
     if (shapeHasValidSize(currentShape)) {
-      setPendingShape(currentShape);
+      if (quickSaveEnabled) {
+        saveAnnotation(currentShape);
+      } else {
+        setPendingShape(currentShape);
+      }
     }
 
     setIsDrawing(false);
@@ -620,16 +667,37 @@ function VideoAnnotator({
     }
   }
 
-  // Save annotation
-  function handleSave(): void {
-    if (!pendingShape || markedStartTime === null || markedEndTime === null) return;
+  function getAnnotationTimeRange(): { startTime: number; endTime: number } {
+    const videoTime = videoRef.current?.currentTime ?? currentTime;
+    const fallbackStart = Math.min(drawStartTimeRef.current, videoTime);
+    let startTime = markedStartTime ?? fallbackStart;
+    let endTime = markedEndTime ?? Math.max(drawStartTimeRef.current, videoTime);
+
+    if (endTime <= startTime) {
+      endTime = Math.min(duration || startTime + DEFAULT_ANNOTATION_DURATION_SECONDS, startTime + DEFAULT_ANNOTATION_DURATION_SECONDS);
+    }
+
+    if (endTime <= startTime) {
+      startTime = Math.max(0, startTime - DEFAULT_ANNOTATION_DURATION_SECONDS);
+    }
+
+    return { startTime, endTime };
+  }
+
+  function getAnnotationComment(annotationComment: string): string {
+    if (annotationComment.trim()) return annotationComment;
+    return selectedPreset?.comment ?? '';
+  }
+
+  function saveAnnotation(shape: Shape, annotationComment = ''): void {
+    const { startTime, endTime } = getAnnotationTimeRange();
 
     const newAnnotation: Annotation = {
       id: generateId(),
-      startTime: markedStartTime,
-      endTime: markedEndTime,
-      shape: pendingShape,
-      comment,
+      startTime,
+      endTime,
+      shape,
+      comment: getAnnotationComment(annotationComment),
       createdAt: new Date().toISOString(),
     };
 
@@ -644,13 +712,16 @@ function VideoAnnotator({
     setMarkedStartTime(null);
     setMarkedEndTime(null);
     setComment('');
-    setSelectedTool(null);
 
     // Send to Streamlit
-    setTimeout(function notifyStreamlit(): void {
-      const value: ComponentValue = { annotations: newAnnotations, newAnnotation };
-      Streamlit.setComponentValue(value);
-    }, 100);
+    const value: ComponentValue = { annotations: newAnnotations, newAnnotation };
+    Streamlit.setComponentValue(value);
+  }
+
+  // Save annotation
+  function handleSave(): void {
+    if (!pendingShape) return;
+    saveAnnotation(pendingShape, comment);
   }
 
   function handleCancel(): void {
@@ -670,38 +741,68 @@ function VideoAnnotator({
     setAnnotations(newAnnotations);
     sentDeletionsRef.current.add(id);
 
-    setTimeout(function notifyStreamlit(): void {
-      const value: ComponentValue = { annotations: newAnnotations, deletedAnnotationId: id };
-      Streamlit.setComponentValue(value);
-    }, 100);
+    const value: ComponentValue = { annotations: newAnnotations, deletedAnnotationId: id };
+    Streamlit.setComponentValue(value);
   }
 
   function handleSeekToAnnotation(annotation: Annotation): void {
     if (videoRef.current) {
+      setIsRewinding(false);
       videoRef.current.currentTime = annotation.startTime;
     }
   }
 
   function togglePlayPause(): void {
     if (videoRef.current) {
-      if (isRewinding) {
-        setRewindRateIndex(0);
-        stopRewind(false);
-      } else if (isPlaying) {
+      if (isPlaying || isRewinding) {
+        setIsRewinding(false);
         videoRef.current.pause();
+        setIsPlaying(false);
+        wasPlayingRef.current = false;
       } else {
+        setIsRewinding(false);
+        videoRef.current.playbackRate = PLAYBACK_RATES[playbackRateIndex];
         videoRef.current.play();
       }
     }
   }
 
-  function togglePlaybackRate(): void {
-    if (isRewinding) {
-      setRewindRateIndex(0);
-      stopRewind(true);
-    }
+  function playForward(): void {
+    const video = videoRef.current;
+    if (!video) return;
 
-    setPlaybackRateIndex((prev) => (prev + 1) % PLAYBACK_RATES.length);
+    const nextIndex = isPlaying && !isRewinding ? (playbackRateIndex + 1) % PLAYBACK_RATES.length : playbackRateIndex;
+    setIsRewinding(false);
+    setPlaybackRateIndex(nextIndex);
+    video.playbackRate = PLAYBACK_RATES[nextIndex];
+    video.play().catch(() => {});
+    setIsPlaying(true);
+    wasPlayingRef.current = true;
+  }
+
+  function rewind(): void {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const nextIndex = isRewinding ? (rewindRateIndex + 1) % PLAYBACK_RATES.length : rewindRateIndex;
+    video.pause();
+    setRewindRateIndex(nextIndex);
+    setIsRewinding(true);
+    setIsPlaying(false);
+    wasPlayingRef.current = true;
+  }
+
+  function handleSelectPreset(preset: AnnotationPreset, index: number): void {
+    setSelectedPresetIndex(index);
+    setComment(preset.comment);
+    if (preset.color) {
+      setSelectedColor(preset.color);
+    }
+    if (preset.tool !== undefined) {
+      setSelectedTool(preset.tool);
+    } else {
+      setSelectedTool('rectangle');
+    }
   }
 
   function toggleRewindRate(): void {
@@ -746,11 +847,11 @@ function VideoAnnotator({
             <button className="play-pause-btn" onClick={togglePlayPause}>
               {isPlaying || isRewinding ? `⏸ ${labels.pause}` : `▶ ${labels.play}`}
             </button>
-            <button className="transport-btn" onClick={toggleRewindRate}>
-              ⏪ {PLAYBACK_RATES[rewindRateIndex]}x
+            <button className={`rewind-speed-btn ${isRewinding ? 'active' : ''}`} onClick={rewind}>
+              ⏪ {labels.rewind || 'Rewind'} {PLAYBACK_RATES[rewindRateIndex]}x
             </button>
-            <button className="transport-btn" onClick={togglePlaybackRate}>
-              ⏩ {PLAYBACK_RATES[playbackRateIndex]}x
+            <button className={`playback-speed-btn ${isPlaying && !isRewinding ? 'active' : ''}`} onClick={playForward}>
+              ▶ {labels.forward || 'Forward'} {PLAYBACK_RATES[playbackRateIndex]}x
             </button>
             <input
               type="range"
@@ -811,11 +912,43 @@ function VideoAnnotator({
                   key={color}
                   className={`color-btn ${selectedColor === color ? 'active' : ''}`}
                   style={{ backgroundColor: color }}
-                  onClick={() => setSelectedColor(color)}
+                  onClick={() => {
+                    setSelectedColor(color);
+                    setSelectedPresetIndex(null);
+                  }}
                   disabled={!!pendingShape}
                 />
               ))}
             </div>
+
+            {annotationPresets.length > 0 && (
+              <div className="preset-section">
+                {annotationPresets.map((preset, index) => (
+                  <button
+                    key={`${preset.label}-${index}`}
+                    className={`preset-btn ${selectedPresetIndex === index ? 'active' : ''}`}
+                    onClick={() => handleSelectPreset(preset, index)}
+                    disabled={!!pendingShape}
+                    title={preset.comment}
+                  >
+                    <span
+                      className="preset-color"
+                      style={{ backgroundColor: preset.color || selectedColor }}
+                    />
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <label className="quick-save-toggle">
+              <input
+                type="checkbox"
+                checked={quickSaveEnabled}
+                onChange={(e) => setQuickSaveEnabled(e.target.checked)}
+              />
+              {labels.quickSave || 'Quick save'}
+            </label>
           </div>
 
           {/* Time markers */}
@@ -841,7 +974,7 @@ function VideoAnnotator({
           </div>
 
           {/* Annotation form */}
-          {pendingShape && markedStartTime !== null && markedEndTime !== null && (
+          {pendingShape && (
             <div className="annotation-form">
               <textarea
                 placeholder={labels.commentPlaceholder}
@@ -905,7 +1038,7 @@ function VideoAnnotator({
       </div>
 
       {/* Instruction banner */}
-      {selectedTool && !pendingShape && (
+      {selectedTool && !pendingShape && !quickSaveEnabled && (
         <div className="instruction-banner">
           {labels.drawInstruction.replace('{shape}', getShapeName(selectedTool, labels))}
         </div>

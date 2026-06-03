@@ -4,12 +4,14 @@ A custom Streamlit component for annotating videos with drawable regions and tim
 
 ## Features
 
-- **Time Range Selection**: Mark start and end times to define annotation ranges
+- **Quick Save**: Draw on the video to immediately create an annotation
+- **Time Range Selection**: Mark start and end times to define exact annotation ranges when needed
+- **Annotation Presets**: One-click category buttons can apply the saved comment, color, and tool
 - **Shape Drawing**: Draw rectangles or circles on the video to highlight regions
 - **Visual Overlays**: Shapes appear during playback when video reaches annotated time ranges
 - **Comments**: Add text comments to each annotation
 - **Custom Colors**: Choose from a configurable color palette
-- **Internationalization**: All UI labels are customizable for any language
+- **Custom Labels**: UI labels can be customized when needed
 - **Normalized Coordinates**: Shape coordinates are stored as 0-1 values for resolution independence
 
 ## Installation
@@ -41,19 +43,27 @@ result = video_annotator(
     height=600,
 )
 
-# With existing annotations and custom labels
+# With existing annotations, custom labels, and presets
 result = video_annotator(
     video_url="https://example.com/video.mp4",
     existing_annotations=my_annotations,
     height=650,
     labels={
-        "play": "Spela",
-        "pause": "Pausa",
-        "markStart": "Markera Start",
-        "markEnd": "Markera Slut",
+        "play": "Start",
+        "pause": "Pause",
+        "markStart": "Set Start",
+        "markEnd": "Set End",
         # ... other labels
     },
     colors=["#00ff00", "#ff0000", "#0000ff"],
+    annotation_presets=[
+        {
+            "label": "Subject",
+            "comment": "Subject",
+            "color": "#00ff00",
+            "tool": "rectangle",
+        },
+    ],
     key="video_annotator_1",
 )
 
@@ -77,8 +87,9 @@ if result:
 | `video_url` | `str` | required | Direct URL to video file (MP4, WebM). YouTube URLs not supported. |
 | `existing_annotations` | `List[AnnotationData]` | `[]` | Previously saved annotations to display |
 | `height` | `int` | `600` | Component height in pixels |
-| `labels` | `Dict[str, str]` | `DEFAULT_LABELS` | UI labels for internationalization |
+| `labels` | `Dict[str, str]` | `DEFAULT_LABELS` | Custom UI labels |
 | `colors` | `List[str]` | See below | Color palette for annotations |
+| `annotation_presets` | `List[AnnotationPreset]` | `[]` | Fast category buttons that can apply comment, color, and tool |
 | `key` | `str` | `None` | Unique key for the component |
 
 ### Default Colors
@@ -108,6 +119,9 @@ if result:
     "delete": "Delete",
     "commentPlaceholder": "Write a comment...",
     "drawInstruction": "Draw a {shape} on the video to mark a region",
+    "quickSave": "Quick save",
+    "rewind": "Rewind",
+    "forward": "Forward",
 }
 ```
 
