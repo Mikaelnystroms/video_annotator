@@ -222,6 +222,62 @@ function VideoAnnotator({
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const selectedPreset = selectedPresetIndex === null ? null : annotationPresets[selectedPresetIndex] ?? null;
 
+  function clearRewindLoop(): void {
+    if (rewindIntervalRef.current !== null) {
+      window.clearInterval(rewindIntervalRef.current);
+      rewindIntervalRef.current = null;
+    }
+
+    rewindLastTickRef.current = null;
+  }
+
+  function stopRewind(resumePlayback = false): void {
+    clearRewindLoop();
+    setIsRewinding(false);
+
+    const shouldResumePlayback = resumePlayback && rewindResumePlaybackRef.current;
+    rewindResumePlaybackRef.current = false;
+
+    if (shouldResumePlayback && videoRef.current) {
+      videoRef.current.play().catch(() => {});
+    }
+  }
+
+  function startRewind(nextRateIndex: number): void {
+    const video = videoRef.current;
+    if (!video || nextRateIndex === 0) return;
+
+    if (!isRewinding) {
+      rewindResumePlaybackRef.current = !video.paused;
+    }
+
+    clearRewindLoop();
+    video.pause();
+    video.playbackRate = 1;
+    rewindLastTickRef.current = performance.now();
+    setIsRewinding(true);
+
+    rewindIntervalRef.current = window.setInterval(() => {
+      const currentVideo = videoRef.current;
+      if (!currentVideo) return;
+
+      const now = performance.now();
+      const lastTick = rewindLastTickRef.current ?? now;
+      const elapsedSeconds = (now - lastTick) / 1000;
+      rewindLastTickRef.current = now;
+
+      const nextTime = Math.max(0, currentVideo.currentTime - elapsedSeconds * PLAYBACK_RATES[nextRateIndex]);
+      currentVideo.currentTime = nextTime;
+      setCurrentTime(nextTime);
+      savedTimeRef.current = nextTime;
+
+      if (nextTime <= 0) {
+        setRewindRateIndex(0);
+        stopRewind(false);
+      }
+    }, REWIND_TICK_MS);
+  }
+
   // Set CSS variables from Streamlit theme
   useEffect(function applyTheme(): void {
     if (theme && containerRef.current) {
@@ -310,6 +366,12 @@ function VideoAnnotator({
     setIsRewinding(false);
   }, [videoUrl]);
 
+  useEffect(function cleanupRewindLoop(): () => void {
+    return () => {
+      clearRewindLoop();
+    };
+  }, []);
+
   // Handle canvas resize with ResizeObserver
   useEffect(function observeCanvasResize(): void | (() => void) {
     function updateCanvasSize(): void {
@@ -352,7 +414,7 @@ function VideoAnnotator({
     setIsRewinding(false);
     setIsPlaying(true);
     wasPlayingRef.current = true;
-  }, []);
+  }, [isRewinding]);
 
   const handlePause = useCallback(function handlePause(): void {
     if (!isRewinding) {
@@ -741,6 +803,20 @@ function VideoAnnotator({
     } else {
       setSelectedTool('rectangle');
     }
+  }
+
+  function toggleRewindRate(): void {
+    const nextRateIndex = (rewindRateIndex + 1) % PLAYBACK_RATES.length;
+
+    if (nextRateIndex === 0) {
+      setRewindRateIndex(0);
+      stopRewind(true);
+      return;
+    }
+
+    setPlaybackRateIndex(0);
+    setRewindRateIndex(nextRateIndex);
+    startRewind(nextRateIndex);
   }
 
   return (

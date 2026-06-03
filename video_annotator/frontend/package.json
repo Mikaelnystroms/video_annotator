@@ -11,6 +11,11 @@
   ],
   "author": "",
   "license": "MIT",
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=18 <21",
+    "npm": ">=9 <11"
+  },
   "repository": {
     "type": "git",
     "url": ""
